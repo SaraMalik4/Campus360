@@ -11,12 +11,18 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'confirm_password', 'user_type']
-    
+        fields = ['username', 'email', 'password', 'confirm_password']
+        extra_kwargs = {
+            'user_type': {'required': False}
+        }
+
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         
+        if 'user_type' not in data or not data['user_type']:
+            data['user_type'] = 'student'
+
         # Validate user_type
         valid_types = ['student', 'teacher', 'staff', 'admin', 'applicant']
         if data['user_type'] not in valid_types:
@@ -26,6 +32,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         validated_data.pop('confirm_password')
+        validated_data['user_type'] = 'applicant'
         user = User.objects.create_user(**validated_data)
         
         # Assign role based on user_type
