@@ -45,6 +45,7 @@ class User(AbstractBaseUser,PermissionsMixin):
     user_type = models.CharField(max_length=30, choices=USER_TYPE_CHOICES)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_login = models.DateTimeField(null=True, blank=True)
@@ -139,11 +140,22 @@ class AuditLog(models.Model):
     action_type = models.CharField(max_length=50)
     table_name = models.CharField(max_length=100)
     record_id = models.IntegerField(null=True)
-    old_value = models.TextField(null=True)
-    new_value = models.TextField(null=True)
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         db_table = 'AuditLog'
 
+class EmailVerification(models.Model):
+    verification_id    = models.AutoField(primary_key=True)
+    user               = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications')
+    verification_token = models.CharField(max_length=255, unique=True)
+    created_at         = models.DateTimeField(auto_now_add=True)
+    expires_at         = models.DateTimeField()
+    verified_at        = models.DateTimeField(null=True, blank=True)
+    is_verified        = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'email_verification'

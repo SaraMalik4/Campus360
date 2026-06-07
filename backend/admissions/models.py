@@ -10,7 +10,7 @@ class Applicant(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     father_name = models.CharField(max_length=100, blank=True)
-    cnic = models.CharField(max_length=13, blank=True)
+    cnic = models.CharField(max_length=15, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, blank=True)
     phone = models.CharField(max_length=20, blank=True)

@@ -2,15 +2,14 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.contrib.auth import logout as django_logout
 from django.utils import timezone
-from .models import User, LoginSession, PasswordReset, UserRole, Role
+from .models import User, LoginSession, PasswordReset, UserRole, Role, EmailVerification
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
     RoleSerializer, LoginSessionSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, ChangePasswordSerializer
 )
-from .utils import generate_jwt_token, create_login_session, generate_password_reset_token
+from .utils import generate_jwt_token, create_login_session, generate_password_reset_token, generate_email_verification_token
 from .permissions import IsAdmin
 import jwt
 from django.conf import settings
@@ -335,3 +334,33 @@ def get_user_roles(request, user_id=None):
         'username': target_user.username,
         'roles': roles
     })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_email(request):
+    from .models import EmailVerification
+    token = request.data.get('token')
+    if not token:
+        return Response({'error': 'Token required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        v = EmailVerification.objects.get(
+            verification_token=token, is_verified=False, expires_at__gt=timezone.now()
+        )
+        v.is_verified = True
+        v.verified_at = timezone.now()
+        v.save(update_fields=['is_verified', 'verified_at'])
+        v.user.is_email_verified = True
+        v.user.save(update_fields=['is_email_verified'])
+        return Response({'message': 'Email verified successfully.'})
+    except EmailVerification.DoesNotExist:
+        return Response({'error': 'Invalid or expired token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def resend_verification_email(request):
+    from .utils import generate_email_verification_token
+    if request.user.is_email_verified:
+        return Response({'message': 'Email already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+    token, _ = generate_email_verification_token(request.user)
+    return Response({'message': 'Verification email resent.', 'dev_token': token})

@@ -1,18 +1,19 @@
 import jwt
 import uuid
-from datetime import datetime, timedelta
-from django.conf import settings
 from django.utils import timezone
-from .models import LoginSession, PasswordReset 
+from datetime import timedelta
+from django.conf import settings
+from .models import LoginSession, PasswordReset, EmailVerification 
 
 def generate_jwt_token(user):
     """Generate JWT token for authenticated user"""
+    now = timezone.now()
     payload = {
         'user_id': user.user_id,
         'email': user.email,
         'user_type': user.user_type,
-        'exp': datetime.utcnow() + timedelta(hours=24),
-        'iat': datetime.utcnow(),
+        'iat': now,
+        'exp': now + timedelta(hours=24)
     }
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
     return token
@@ -31,9 +32,6 @@ def create_login_session(user, request):
     
     device_info = request.META.get('HTTP_USER_AGENT', '')
     
-    # Deactivate all other active sessions for this user
-    LoginSession.objects.filter(user=user, is_active=True).update(is_active=False)
-    
     # Create new session
     session = LoginSession.objects.create(
         user=user,
@@ -48,7 +46,7 @@ def create_login_session(user, request):
 def generate_password_reset_token(user):
     """Generate a password reset token"""
     token = str(uuid.uuid4())
-    expires_at = timezone.now() + timedelta(hours=24)
+    expires_at = timezone.now() + timedelta(hours=1)
     
     # Deactivate any existing unused reset tokens for this user
     PasswordReset.objects.filter(user=user, is_used=False).update(is_used=True)
@@ -69,3 +67,10 @@ def decode_jwt_token(token):
         return payload
     except jwt.InvalidTokenError:
         return None
+
+def generate_email_verification_token(user):
+    EmailVerification.objects.filter(user=user, is_verified=False).delete
+    token = str(uuid.uuid4())
+    expires_at = timezone.now() + timedelta(hours=24)
+    EmailVerification.objects.create(user=user, verification_token=token, expires_at=expires_at)
+    return token, expires_at

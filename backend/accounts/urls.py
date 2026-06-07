@@ -24,4 +24,8 @@ urlpatterns = [
     path('roles/remove/', views.remove_role, name='remove-role'),
     path('roles/user/', views.get_user_roles, name='user-roles'),
     path('roles/user/<int:user_id>/', views.get_user_roles, name='user-roles-specific'),
+
+    # Email verification endpoints
+    path('auth/verify-email/', views.verify_email, name='verify-email'),
+    path('auth/resend-verification/', views.resend_verification_email, name='resend-verification'),
 ]
