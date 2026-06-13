@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from academics.models import DegreeProgram
 
 class Applicant(models.Model):
     user = models.OneToOneField(
@@ -60,10 +61,14 @@ class AcademicRecord(models.Model):
 
 class AdmissionApplication(models.Model):
     STATUS_CHOICES = [
-        ('pending','Pending'),
-        ('under_review','Under Review'),
-        ('approved','Approved'),
-        ('rejected','Rejected'),
+         ('draft', 'Draft'),
+        ('pending', 'Pending'),
+        ('under_review', 'Under Review'),
+        ('documents_pending', 'Documents Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waitlist', 'Waitlist'),
+        ('registered', 'Registered'),
     ]
     ADMISSION_TYPE_CHOICES = [
         ('Regular','Regular'),
@@ -74,8 +79,31 @@ class AdmissionApplication(models.Model):
         Applicant, on_delete=models.CASCADE,
         related_name='applications'
     )
+    program = models.ForeignKey(
+        DegreeProgram, on_delete=models.RESTRICT,
+        related_name='applications'
+    )
     application_number = models.CharField(max_length=50, unique=True)
     admission_type = models.CharField(max_length=20, choices=ADMISSION_TYPE_CHOICES, default='Regular')
+    session_year          = models.IntegerField(null=True, blank=True)
+    session_type          = models.CharField(
+        max_length=20,
+        choices=[('spring', 'Spring'), ('fall', 'Fall'), ('summer', 'Summer')],
+        blank=True
+    )
+    applied_under_quota   = models.CharField(
+        max_length=30,
+        choices=[
+            ('open_merit', 'Open Merit'),
+            ('minority', 'Minority'),
+            ('disabled', 'Disabled'),
+            ('sports', 'Sports'),
+        ],
+        default='open_merit'
+    )
+    is_fee_paid           = models.BooleanField(default=False)
+    is_eligible           = models.BooleanField(null=True, blank=True)
+    is_documents_verified = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
 
@@ -94,4 +122,93 @@ class ProgramPreference(models.Model):
     class Meta:
         db_table = 'admissions_program_preference'
 
+class ApplicantDocument(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('matric_certificate', 'Matric Certificate'),
+        ('fsc_certificate', 'FSc Certificate'),
+        ('cnic_front', 'CNIC Front'),
+        ('cnic_back', 'CNIC Back'),
+        ('photo', 'Passport Photo'),
+        ('domicile', 'Domicile'),
+        ('father_cnic', 'Father CNIC'),
+        ('other', 'Other'),
+    ]
 
+    document_id          = models.AutoField(primary_key=True)
+    applicant            = models.ForeignKey(Applicant, on_delete=models.CASCADE, related_name='documents')
+    document_type        = models.CharField(max_length=50, choices=DOCUMENT_TYPE_CHOICES)
+    file_name            = models.CharField(max_length=255)
+    file_path            = models.CharField(max_length=500)
+    file_size            = models.IntegerField()
+    file_type            = models.CharField(max_length=50)
+    uploaded_at          = models.DateTimeField(auto_now_add=True)
+    is_verified          = models.BooleanField(default=False)
+    verified_by          = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='verified_documents'
+    )
+    verified_at          = models.DateTimeField(null=True, blank=True)
+    verification_remarks = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'applicant_document'
+        unique_together = ['applicant', 'document_type']
+
+
+class AdmissionDecision(models.Model):
+    DECISION_CHOICES = [
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waitlist', 'Waitlist'),
+    ]
+
+    decision_id           = models.AutoField(primary_key=True)
+    application           = models.OneToOneField(AdmissionApplication, on_delete=models.RESTRICT, related_name='decision')
+    decision              = models.CharField(max_length=20, choices=DECISION_CHOICES)
+    decided_by            = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name='admission_decisions'
+    )
+    decision_date         = models.DateField(auto_now_add=True)
+    merit_score           = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    merit_position        = models.IntegerField(null=True, blank=True)
+    remarks               = models.TextField(blank=True)
+    registration_deadline = models.DateField(null=True, blank=True)
+    offered_section       = models.CharField(max_length=20, blank=True)
+    rejection_reason      = models.TextField(blank=True)
+    created_at            = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'admissions_decision'
+
+
+class AdmissionLog(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('submitted', 'Submitted'),
+        ('reviewed', 'Reviewed'),
+        ('documents_verified', 'Documents Verified'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waitlisted', 'Waitlisted'),
+    ]
+
+    log_id          = models.AutoField(primary_key=True)
+    application     = models.ForeignKey(AdmissionApplication, on_delete=models.CASCADE, related_name='logs')
+    action_type     = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    performed_by    = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name='admission_logs'
+    )
+    previous_status = models.CharField(max_length=30, blank=True)
+    new_status      = models.CharField(max_length=30, blank=True)
+    remarks         = models.TextField(blank=True)
+    timestamp       = models.DateTimeField(auto_now_add=True)
+    ip_address      = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'admissions_log'
